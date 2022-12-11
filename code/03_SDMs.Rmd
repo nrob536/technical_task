@@ -1,0 +1,436 @@
+---
+title: "SDMs of the invasive Kelp (Undaria pinnatifida)"
+author: "Nestor M. Robinson"
+date: "17 May 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo =TRUE)
+knitr::opts_chunk$set(message =  FALSE)
+knitr::opts_chunk$set(warning =  FALSE)
+setwd("C:/Users/robinsonnm/Documents/Robinson_2020")# set location of the working directory
+memory.limit(50000)
+```
+getwd()
+
+```{r, include=FALSE}
+
+## Outline ##
+
+This tutorial illustrates how to build, evaluate and project habitat suitability 
+for species distribution models within R. It applies to the Asian Kelp in New Zealand coast, 
+however it can be easily replicated for other marine species. 
+
+The main steps described bellow, include the following:
+
+1. Data preparation
+ + Study area and manipulating the input data
+ + Species occurrence data
+   - Presence-only data
+   - Presence/Absence data
+2. Model fitting, prediction, and evaluation
+3. Making projections (current and future climatic scenarios)
+
+# 
+
+# Workshop environment preparation # 
+
+
+{library(biomod2)
+library(sp)
+library(rgdal)
+library(rasterVis)
+library(Cairo)
+library(raster)
+}
+```
+```{r, include=FALSE}
+# custom values for plotting figures # 
+{
+myCRS <- ' +proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0'
+NZbox <- extent(164,186,-54,-33)
+
+
+print_coast <- latticeExtra::layer(sp.lines(coast_sp, lwd=0.05, col='black',alpha=0.8))
+
+}
+
+myTheme=theme_bw()+
+  theme(axis.title.x = element_blank(),
+        axis.text.x  = element_text(family="Times",color="Black",vjust=0.5,size=10),
+        axis.title.y = element_blank(),
+        axis.text.y  = element_text(family="Times",colour="Black",
+                                    size=10,
+                                    vjust=0.5,
+                                    hjust=0),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor =element_blank(),
+        plot.title=element_blank(),
+        legend.position = c(0.8,0.2),
+        legend.title = element_text(size=10,family="Times"),
+        legend.text=element_text(size = 10, family = 'Times'),
+        legend.key.size = unit(0.6, 'cm'),
+        legend.key.width = unit(0.6, 'cm'),
+        legend.background = element_blank())
+
+```
+## SDMs Asian kelp distribution in New Zealand ##
+
+# 1. Three occurrence datasets were used to run the models. 
+a) Presence - background (PB) full dataset: 9,326 presence points 
+b) Presence - background unique sites with data (USWD): 66 presence grid cells + 200 pseudoabsence cells
+c) Presence - Absence (PA) : 66 presence grid cells + 112 true absence cells
+
+
+```{r, include= TRUE}
+summary(dat1)
+
+# Reading files # 
+dat1 <- read.csv("./data_in/occ_dat/occ_swd_dat.csv", header=T) # presence records
+dat2 <- read.csv("./data_in/occ_dat/abs_swd_dat.csv", header=T) # absence records
+
+env2000a <- stack ("./data_in/stacks_1km/env2000a_200m.grd")
+env2000b <- stack ("./data_in/stacks_1km/env2000b_200m.grd")
+rcp2.6_2050 <-stack('./data_in/stacks_1km/rcp2.6_2050.grd')
+rcp4.5_2050 <-stack('./data_in/stacks_1km/rcp4.6_2050.grd')
+rcp6.0_2050 <-stack('./data_in/stacks_1km/rcp6.0_2050.grd')
+rcp8.5_2050 <-stack('./data_in/stacks_1km/rcp8.5_2050.grd')
+rcp2.6_2100 <-stack('./data_in/stacks_1km/rcp2.6_2050.grd')
+rcp4.5_2100 <-stack('./data_in/stacks_1km/rcp4.6_2050.grd')
+rcp6.0_2100 <-stack('./data_in/stacks_1km/rcp6.0_2050.grd')
+rcp8.5_2100 <-stack('./data_in/stacks_1km/rcp8.5_2050.grd')
+
+
+```
+
+
+# 5. Adjusting the settings for the three models (MAXENT.Phillips, GBM, RF) 
+```{r, include=TRUE}
+
+options=BIOMOD_ModelingOptions(
+  
+  GBM = list( distribution = 'bernoulli',
+              n.trees = 5000,
+              interaction.depth = 2,
+              n.minobsinnode = 5,
+              shrinkage = 0.001,
+              bag.fraction = 0.5,
+              train.fraction = 1,
+              cv.folds = 3,
+              keep.data = FALSE,
+              verbose = FALSE,
+              perf.method = 'cv'),
+  
+  
+  RF = list( do.classif = TRUE,
+             ntree = 2500,
+             mtry = 'default',
+             nodesize = 5,
+             maxnodes = NULL),
+  
+  
+
+  MAXENT.Phillips = list( path_to_maxent.jar = './maxent.jar/',
+                          memory_allocated =  1024,
+                          background_data_dir = 'default',
+                          maximumbackground = 'default',
+                          maximumiterations = 500,
+                          visible = FALSE,
+                          linear = FALSE,
+                          quadratic =TRUE,
+                          product = TRUE,
+                          threshold = FALSE,
+                          hinge = FALSE,
+                          lq2lqptthreshold = 80,
+                          l2lqthreshold =5,
+                          hingethreshold = 15,
+                          beta_threshold = -1,
+                          beta_categorical = -1,
+                          beta_lqp = -1,
+                          beta_hinge = 0.5,
+                          betamultiplier = 1,
+                          defaultprevalence = 0.5))
+
+```
+
+# 6. Runing the models 
+## 6a Run an initial model with presence only and pseudoabsence (PO)
+```{r, include=TRUE}
+# Manipulate the presence data to get in Biomod2 format
+
+myRespName1='Asian kelp' 
+myResp1=(as.numeric(dat1[,"occ"]))
+myRespXY1=dat1[,c("x", "y")]
+w <- as.numeric(dat1[, "weight"])
+v <- rep (1, times= 1200)
+myWeights <- c(w, v)
+
+# Formating the data # 
+Data1=BIOMOD_FormatingData(resp.var = myResp1,
+                                  expl.var=env2000b,
+                                  resp.xy=myRespXY1,
+                                  resp.nam= 'Asian kelp',
+                                  PA.nb.rep = 1,
+                                  PA.strategy = 'sre',
+                                  PA.sre.quant = 0.025,
+                                  PA.nb.absences = 1200,
+                                  na.rm = T)
+Data1
+plot(Data1)
+
+
+```
+
+
+```{r, include=TRUE, eco=FALSE}
+# Run the models (RF, GBM, and Maxent.Phillips ) # 
+
+m1=BIOMOD_Modeling(
+  Data1,
+  models=c('MAXENT.Phillips','GBM','RF'),
+  models.options = options,
+  NbRunEval=1,
+  #prevalence= 0.5,
+  VarImport = 2,
+  Yweights= myWeights,
+  models.eval.meth = c('ROC', 'TSS'),
+  SaveObj = TRUE,
+  rescal.all.models = T,
+  do.full.models = T,
+  modeling.id = "PO_2000")
+
+# projection over NZ extent under current conditions
+Proj01 <- BIOMOD_Projection(
+  modeling.output = m1,
+  new.env =env2000a,
+  proj.name = 'PO_2000',
+  selected.models = 'all',
+  binary.meth = 'TSS',
+  compress = 'xz',
+  build.clamping.mask = T,
+  output.format = '.grd')
+
+plot(Proj01, str.grep=c('MAXENT.Phillips', 'GBM', 'RF'))
+# Esenmble the projections # 
+
+EM01 <- BIOMOD_EnsembleModeling(
+  modeling.output = m1,
+  chosen.models = 'all',
+  em.by='all',
+  eval.metric = c('TSS'),
+  eval.metric.quality.threshold = c(0.7),
+  prob.mean = F,
+  prob.cv = F,
+  prob.ci = F,
+  prob.ci.alpha = 0.05,
+  prob.median = F,
+  committee.averaging = F,
+  prob.mean.weight = T,
+  prob.mean.weight.decay = 'proportional' )
+
+EF01 <- BIOMOD_EnsembleForecasting(projection.output = Proj01,
+                                   EM.output = EM01)
+
+plot(EF01)
+EF01<-get_predictions(EF01)
+
+writeRaster(EF01, './data_out/preds/PO_proj2000.grd', format='raster', overwrite=T)
+
+
+
+# Get model evaluation results# 
+
+
+myBiomodModelEval <- get_evaluations(m1)
+myBiomodModelEval["ROC", "Testing.data",,,]
+myBiomodModelEval["TSS", "Testing.data",,,]
+
+
+# Get the variables importance for each model and model run (1-5)#
+varImp=as.data.frame(get_variables_importance(m1))
+
+varImp
+
+# Plot response curves
+
+# Load the models for which we want to extract the predicted response curves
+
+myMaxent1 <- BIOMOD_LoadModels(m1, models='GBM')
+
+# plot response plots
+
+myRespPlot1=response.plot2(model=myMaxent1,
+               Data =get_formal_data(m1,'expl.var'),
+               show.variables= get_formal_data(m1,'expl.var.names'),
+               save.file="yes",
+               name="response_curve_Maxent",
+               plot=TRUE,
+               fixed.var.metric = 'median',
+               col = c("blue", "red"),
+               legend = TRUE,
+               data_species = get_formal_data(m1,'resp.var'))
+```
+
+
+# 6c. Models with unique sites with data and true absence (PA)
+```{r, include=TRUE, eco=FALSE}
+PAdata=rbind(dat1, dat2)
+
+
+myRespName2='species' 
+myResp2=as.numeric(PAdata[,"occ"])
+myRespXY2=PAdata[,c("x", "y")]
+myWeights2 <- PAdata[-608, "weight"]
+
+str(myWeights2)
+# Formating the data # 
+
+PAdata
+Data2 <- BIOMOD_FormatingData(resp.var = myResp2,
+                                     expl.var = env2000b,
+                                     resp.xy = myRespXY2,
+                                     resp.name = myRespName2,
+                                     PA.strategy = 'user.defined',
+                                     #PA.table = PAdata,
+                                     na.rm = T)
+
+Data2
+plot(Data2)
+# Run the models (RF, GBM, and Maxent.Phillips ) # 
+
+m2=BIOMOD_Modeling(
+  Data2,
+  models=c('MAXENT.Phillips','GBM','RF'),
+  models.options = options,
+  NbRunEval=1,
+  VarImport = 2,
+  Yweights = myWeights2,
+  #DataSplit = 75,
+  models.eval.meth = c('ROC', 'TSS'),
+  SaveObj = TRUE,
+  rescal.all.models = T,
+  do.full.models = T,
+  modeling.id = "AllVars_2000_swd2")
+
+
+# projection over NZ under current conditions
+Proj02<- BIOMOD_Projection(
+  modeling.output = m2,
+  new.env = env2000a,
+  proj.name = 'PA_2000',
+  selected.models = 'all',
+  binary.meth = 'TSS',
+  compress = 'xz',
+  build.clamping.mask =T,
+  output.format = '.grd',
+  silent=T)
+
+# Esenmble the projections # 
+
+EM02 <- BIOMOD_EnsembleModeling(
+  modeling.output = m2,
+  chosen.models = 'all',
+  em.by='all',
+  eval.metric = c('TSS'),
+  eval.metric.quality.threshold = c(0.7),
+  prob.mean = F,
+  prob.cv = F,
+  prob.ci = F,
+  prob.ci.alpha = 0.05,
+  prob.median = F,
+  committee.averaging = F,
+  prob.mean.weight = T,
+  prob.mean.weight.decay = 'proportional' )
+
+EF02 <- BIOMOD_EnsembleForecasting(projection.output = Proj02,
+                                   EM.output = EM02)
+
+plot(EF02)
+EF02<-get_predictions(EF02)
+
+writeRaster(EF02, './data_out/preds/PA_proj2000.grd', format='raster', overwrite=T)
+
+
+# Get model evaluation results#
+
+
+Eval2 <- get_evaluations(m2)
+Eval2["ROC", "Testing.data",,,]
+Eval2["TSS", "Testing.data",,,]
+
+
+# Get the variables importance for each model and model run (1-5)#
+varImp2=as.data.frame(get_variables_importance(m2))
+varImp2
+
+
+
+# Plot response curves
+
+# Load the models for which we want to extract the predicted response curves
+myMaxent2 <- BIOMOD_LoadModels(myBiomodModelOut2, models='MAXENT.Phillips')
+
+# plot response plots
+myRespPlot2=response.plot2(model=myMaxent2,
+                           Data =get_formal_data(myBiomodModelOut2,'expl.var'),
+                           show.variables= get_formal_data(myBiomodModelOut2,'expl.var.names'),
+                           save.file="yes",
+                           name="response_curve_Maxent_swd2",
+                           plot=TRUE,
+                           fixed.var.metric = 'mean',
+                           col = "blue",
+                           legend = TRUE,
+                           data_species = get_formal_data(myBiomodModelOut2,'resp.var'))
+
+
+
+
+```
+
+
+
+# project into the future RCP 2.6 # 
+myBiomodRCP2.6_2050 <- BIOMOD_Projection(
+  modeling.output = myBiomodModelOut2,
+  new.env = RCP2.6_2050,
+  proj.name = 'future',
+  selected.models = 'all',
+  binary.meth = 'TSS',
+  compress = 'xz',
+  clamping.mask = T,
+  output.format = '.grd')
+
+projRCP2.6_2050 <- get_predictions(myBiomodRCP2.6_2050)
+plot5=levelplot(projRCP2.6_2050, 
+                par.settings=BuRdTheme, 
+                main="Presence-background dataset RCP2.6 2050 (74 presence + 113 absence)")+print_coast
+plot5
+
+Cairo(file="./figs/Fig3-6.png",
+      type='png',
+      units='cm',
+      width=18,
+      height = 12,
+      pointsize = 1,
+      bg='white',
+      dpi=400)
+print(plot5)
+dev.off()
+
+RangeSize1 <-BIOMOD_RangeSize(myCurrentProj2,projRCP2.6_2050)
+plot(RangeSize1$Diff.By.Pixel)
+RangeSize1
+
+RangeSize1
+
+Cairo(file="./figs/Fig3-7.png",
+      type='png',
+      units='cm',
+      width=20,
+      height = 12,
+      pointsize = 1,
+      bg='white',
+      dpi=300)
+plot(RangeSize1$Diff.By.Pixel)
+dev.off()
