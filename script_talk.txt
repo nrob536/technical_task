@@ -1,0 +1,39 @@
+Tena Koutou Tena Koutou Katoa
+Thank you all for meeting with me so I can tell you more about myself and my professional experience.
+
+For the next 10 minutes, I will focus on explaning about the process I follow to identyfy relevant data sources
+and provide an example where I have use my data wrangling skills to prepare data for analysis and visualization.
+
+First, I would like to show you this diagram which ilustrates my process for identifying relevant data sources. 
+In the past, I've have used the Preferred Reporting Items for Systematic Reviews and Meta-Analysis (PRISMA).
+This methodology is a systematic approach often used to conduct literature reviews.
+While doing my PhD, I've used this methodology to gather the most relevant papers in my area of research,
+which I will explain further in the following slides. 
+
+A central topic of my doctoral thesis was the application of Species Distribution Models, also known as
+Ecological Niche Models. For simplicity, I will refer to this as SDMs for short. In a nutshell, SDMs are 
+applications of computer algorithms used to predict the distribution of a species across geographic space 
+and time using species occurrence and environmental data.  
+
+Tipicaly, an SDMs excerise consist of 6 major steps which I'm no going to go over the nitty gritty details in 
+this talk. Here, I will just focus on Step 1 to 3 because this are the steps where data wrangling skills come in handy.
+
+In this diagram, I am showing an actual application of an SDMs which comes from one of the chapters
+in my doctoral thesis. One of thesis chapters focused on using SDMs to predict the distribution of an invasive 
+species in New Zealand. In the following slides, I will guide you through the steps in the process. 
+
+Before writing any code, an Ecologist needs to make a decision about what taxa and for what purpose the 
+predictive models will be used for. In my case, I wanted to use the invasie kelp Undaria pinnatifida becuase
+of its negative impacts in New Zealand and the data available for modelling its distribution. So, that was easy, we
+are done with Step 1. 
+
+
+
+ 
+
+ 
+  
+
+
+
+

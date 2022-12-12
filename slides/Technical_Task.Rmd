@@ -9,7 +9,50 @@ output:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
-source("../code/params.R")
+library(spocc) 
+library(rgbif)
+library(robis)
+library(tidyverse)
+library(proj4)
+library(ggplot2)
+library(spData)
+library(sdmpredictors)
+library(raster)
+library(rasterVis)
+library(biomod2)
+
+polygon <-"POLYGON ((162.04834 -32.97180, 161.32324 -47.70976, 183.36182 -47.73932,181.95557 -32.84267, 162.04834 -32.97180))"
+
+proj4 <- "+proj=tmerc +lat_0=0 +lon_0=173 +k=0.9996 +x_0=1600000 +y_0=10000000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs "
+
+col.names <- c("scientificName", "decimalLongitude", 'decimalLatitude', "source")
+
+NZmap <- map_data("world")%>%
+  filter (region == 'New Zealand' & subregion %in% c("North Island" , "South Island"))
+
+  
+xlim <- c(165,179)
+ylim <- c(-47,-34)
+e <- extent(165, 179, -47, -34)
+
+
+myTheme=theme_bw()+
+  theme(axis.title.x = element_blank(),
+        axis.text.x  = element_text(family="Times",color="Black",vjust=0.5,size=10),
+        axis.title.y = element_blank(),
+        axis.text.y  = element_text(family="Times",colour="Black",
+                                    size=10,
+                                    vjust=0.5,
+                                    hjust=0),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor =element_blank(),
+        plot.title=element_blank(),
+        legend.position = c(0.8,0.2),
+        legend.title = element_text(size=10,family="Times"),
+        legend.text=element_text(size = 10, family = 'Times'),
+        legend.key.size = unit(0.6, 'cm'),
+        legend.key.width = unit(0.6, 'cm'),
+        legend.background = element_blank())
 
 ```
 # My process to identify and source data
@@ -50,6 +93,11 @@ knitr::include_graphics('../figs/Undaria.jpg')
 
 
 # Step 2 - Compile environmental dataset 
+For modelling the distribution of marine species, a great deal of datasets is readily available for download.These are raster layers of global coverage at a coarse resolution of 9 km and finer grain at 1 km. 
+
+1. MARSPEC: http://www.marspec.org/
+2. GMED: https://gmed.auckland.ac.nz/download.html
+3. Bio-Oracle: https://bio-oracle.org/
 
 ```{r echo=TRUE, message=FALSE, warning=FALSE}
 datasets <- list_datasets(terrestrial = FALSE, marine = TRUE)
@@ -71,9 +119,9 @@ plot(env.nz)
 
 ```
 
-# Step 3 - Construct occurrence data set 
+# Step 2 - Continues ... construct occurrence data set 
 
-For marine species, occurrence data is available in several biodiversity databases. In the case of Undaria, data is available for download from three data sources. 
+For marine species, occurrence data is available in several biodiversity databases. In the case of _Undaria_, data is available for download from three data sources. 
 
 - Marine Biosecurity Porthole: https://marinebiosecurity.org.nz/search-for-species/
 - Global Biodiversity Information Facility: https://www.gbif.org/occurrence/search?country=NZ&taxon_key=5422556
@@ -92,8 +140,7 @@ mbph <- read.csv ("../data/Undaria_Porthole.csv", header = T)
 
 lapply(list(gbif[1:3],obis[c(8,11,29)],mbph[c(12,6,7)]), head) 
 ```
-# Data transformation
-First we need to convert UTC coordinates from Biosecurity Porthole into lat/long
+
 ```{r echo=TRUE, message=FALSE, warning=FALSE}
 x_y <- mbph[,26:27]
 lon_lat <- as.data.frame(proj4::project(x_y, proj4, inverse=T)) %>%
@@ -131,7 +178,7 @@ ggplot()+
   myTheme
 ```
 
-# Absence - Background points
+# Step 3 - Data transformation and preparation for analysis
 
 ```{r echo=TRUE, message=FALSE, warning=FALSE}
 myRespName1='Asian kelp' 
