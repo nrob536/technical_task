@@ -1,5 +1,6 @@
 ---
-title: "Technical Task"
+title: "Technical Task - Data Wrangler"
+subtitle : "Species Distribution Modelling example"
 author: "Nestor M. Robinson"
 date: "`r Sys.Date()`"
 output:
